@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// DefaultConfig contains default settings for use on the Ethereum main net.
+// DefaultConfig contains default settings for use on the MIX main net.
 var DefaultConfig = Config{
 	SyncMode: downloader.FastSync,
 	Ethash: ethash.Config{
@@ -43,7 +43,7 @@ var DefaultConfig = Config{
 		DatasetsInMem:  1,
 		DatasetsOnDisk: 2,
 	},
-	NetworkId:      1,
+	NetworkId:      76,
 	LightPeers:     100,
 	DatabaseCache:  512,
 	TrieCleanCache: 256,
