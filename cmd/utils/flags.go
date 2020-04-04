@@ -1246,8 +1246,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
-  default:
-    cfg.DataDir = filepath.Join(node.DefaultDataDir(), "mix")
+	default:
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "mix")
 	}
 }
 
