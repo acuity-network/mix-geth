@@ -316,7 +316,7 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, p
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
-  case config.IsMix(next):
+	case config.IsMix(next):
 		return calcDifficultyMix(time, parent)
 	case config.IsMuirGlacier(next):
 		return calcDifficultyEip2384(time, parent)
@@ -416,7 +416,7 @@ func calcDifficultyMix(time uint64, parent *types.Header) *big.Int {
 	//        )
 
 	bigTime := new(big.Int).SetUint64(time)
-  bigParentTime := new(big.Int).SetUint64(parent.Time)
+	bigParentTime := new(big.Int).SetUint64(parent.Time)
 
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
