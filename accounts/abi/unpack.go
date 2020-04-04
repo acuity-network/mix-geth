@@ -26,16 +26,14 @@ import (
 )
 
 var (
-	maxUint256 = big.NewInt(0).Add(
-		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil),
-		big.NewInt(-1))
-	maxInt256 = big.NewInt(0).Add(
-		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(255), nil),
-		big.NewInt(-1))
+	// MaxUint256 is the maximum value that can be represented by a uint256
+	MaxUint256 = new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
+	// MaxInt256 is the maximum value that can be represented by a int256
+	MaxInt256 = new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 255), common.Big1)
 )
 
-// reads the integer based on its kind
-func readInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
+// ReadInteger reads the integer based on its kind and returns the appropriate value
+func ReadInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
 	switch kind {
 	case reflect.Uint8:
 		return b[len(b)-1]
@@ -54,17 +52,17 @@ func readInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
 	case reflect.Int64:
 		return int64(binary.BigEndian.Uint64(b[len(b)-8:]))
 	default:
-		// the only case lefts for integer is int256/uint256.
-		// big.SetBytes can't tell if a number is negative, positive on itself.
-		// On EVM, if the returned number > max int256, it is negative.
+		// the only case left for integer is int256/uint256.
 		ret := new(big.Int).SetBytes(b)
 		if typ == UintTy {
 			return ret
 		}
-
-		if ret.Cmp(maxInt256) > 0 {
-			ret.Add(maxUint256, big.NewInt(0).Neg(ret))
-			ret.Add(ret, big.NewInt(1))
+		// big.SetBytes can't tell if a number is negative or positive in itself.
+		// On EVM, if the returned number > max int256, it is negative.
+		// A number is > max int256 if the bit at position 255 is set.
+		if ret.Bit(255) == 1 {
+			ret.Add(MaxUint256, new(big.Int).Neg(ret))
+			ret.Add(ret, common.Big1)
 			ret.Neg(ret)
 		}
 		return ret
@@ -102,8 +100,8 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	return
 }
 
-// through reflection, creates a fixed array to be read from
-func readFixedBytes(t Type, word []byte) (interface{}, error) {
+// ReadFixedBytes uses reflection to create a fixed array to be read from
+func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
 		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array")
 	}
@@ -230,7 +228,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case StringTy: // variable arrays are written at the end of the return bytes
 		return string(output[begin : begin+length]), nil
 	case IntTy, UintTy:
-		return readInteger(t.T, t.Kind, returnOutput), nil
+		return ReadInteger(t.T, t.Kind, returnOutput), nil
 	case BoolTy:
 		return readBool(returnOutput)
 	case AddressTy:
@@ -240,7 +238,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case BytesTy:
 		return output[begin : begin+length], nil
 	case FixedBytesTy:
-		return readFixedBytes(t, returnOutput)
+		return ReadFixedBytes(t, returnOutput)
 	case FunctionTy:
 		return readFunctionType(t, returnOutput)
 	default:
@@ -269,7 +267,7 @@ func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err 
 	totalSize.Add(totalSize, bigOffsetEnd)
 	totalSize.Add(totalSize, lengthBig)
 	if totalSize.BitLen() > 63 {
-		return 0, 0, fmt.Errorf("abi length larger than int64: %v", totalSize)
+		return 0, 0, fmt.Errorf("abi: length larger than int64: %v", totalSize)
 	}
 
 	if totalSize.Cmp(outputLength) > 0 {

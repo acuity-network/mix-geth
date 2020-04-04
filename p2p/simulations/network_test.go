@@ -17,9 +17,11 @@
 package simulations
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -79,11 +81,13 @@ func TestSnapshot(t *testing.T) {
 
 	// connect nodes in a ring
 	// spawn separate thread to avoid deadlock in the event listeners
+	connectErr := make(chan error, 1)
 	go func() {
 		for i, id := range ids {
 			peerID := ids[(i+1)%len(ids)]
 			if err := network.Connect(id, peerID); err != nil {
-				t.Fatal(err)
+				connectErr <- err
+				return
 			}
 		}
 	}()
@@ -98,9 +102,10 @@ OUTER:
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
+		case err := <-connectErr:
+			t.Fatal(err)
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
-
 				// fail on any disconnect
 				if !ev.Conn.Up {
 					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
@@ -192,7 +197,7 @@ OUTER:
 
 	connEventCount = nodeCount
 
-OUTER_TWO:
+OuterTwo:
 	for {
 		select {
 		case <-ctx.Done():
@@ -210,7 +215,7 @@ OUTER_TWO:
 				connEventCount--
 				log.Debug("ev", "count", connEventCount)
 				if connEventCount == 0 {
-					break OUTER_TWO
+					break OuterTwo
 				}
 			}
 		}
@@ -392,6 +397,275 @@ func TestNetworkSimulation(t *testing.T) {
 	}
 }
 
+func createTestNodes(count int, network *Network) (nodes []*Node, err error) {
+	for i := 0; i < count; i++ {
+		nodeConf := adapters.RandomNodeConfig()
+		node, err := network.NewNodeWithConfig(nodeConf)
+		if err != nil {
+			return nil, err
+		}
+		if err := network.Start(node.ID()); err != nil {
+			return nil, err
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	return nodes, nil
+}
+
+func createTestNodesWithProperty(property string, count int, network *Network) (propertyNodes []*Node, err error) {
+	for i := 0; i < count; i++ {
+		nodeConf := adapters.RandomNodeConfig()
+		nodeConf.Properties = append(nodeConf.Properties, property)
+
+		node, err := network.NewNodeWithConfig(nodeConf)
+		if err != nil {
+			return nil, err
+		}
+		if err := network.Start(node.ID()); err != nil {
+			return nil, err
+		}
+
+		propertyNodes = append(propertyNodes, node)
+	}
+
+	return propertyNodes, nil
+}
+
+// TestGetNodeIDs creates a set of nodes and attempts to retrieve their IDs,.
+// It then tests again whilst excluding a node ID from being returned.
+// If a node ID is not returned, or more node IDs than expected are returned, the test fails.
+func TestGetNodeIDs(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 5
+	nodes, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Could not creat test nodes %v", err)
+	}
+
+	gotNodeIDs := network.GetNodeIDs()
+	if len(gotNodeIDs) != numNodes {
+		t.Fatalf("Expected %d nodes, got %d", numNodes, len(gotNodeIDs))
+	}
+
+	for _, node1 := range nodes {
+		match := false
+		for _, node2ID := range gotNodeIDs {
+			if bytes.Equal(node1.ID().Bytes(), node2ID.Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created node was not returned by GetNodes(), ID: %s", node1.ID().String())
+		}
+	}
+
+	excludeNodeID := nodes[3].ID()
+	gotNodeIDsExcl := network.GetNodeIDs(excludeNodeID)
+	if len(gotNodeIDsExcl) != numNodes-1 {
+		t.Fatalf("Expected one less node ID to be returned")
+	}
+	for _, nodeID := range gotNodeIDsExcl {
+		if bytes.Equal(excludeNodeID.Bytes(), nodeID.Bytes()) {
+			t.Fatalf("GetNodeIDs returned the node ID we excluded, ID: %s", nodeID.String())
+		}
+	}
+}
+
+// TestGetNodes creates a set of nodes and attempts to retrieve them again.
+// It then tests again whilst excluding a node from being returned.
+// If a node is not returned, or more nodes than expected are returned, the test fails.
+func TestGetNodes(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 5
+	nodes, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Could not creat test nodes %v", err)
+	}
+
+	gotNodes := network.GetNodes()
+	if len(gotNodes) != numNodes {
+		t.Fatalf("Expected %d nodes, got %d", numNodes, len(gotNodes))
+	}
+
+	for _, node1 := range nodes {
+		match := false
+		for _, node2 := range gotNodes {
+			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created node was not returned by GetNodes(), ID: %s", node1.ID().String())
+		}
+	}
+
+	excludeNodeID := nodes[3].ID()
+	gotNodesExcl := network.GetNodes(excludeNodeID)
+	if len(gotNodesExcl) != numNodes-1 {
+		t.Fatalf("Expected one less node to be returned")
+	}
+	for _, node := range gotNodesExcl {
+		if bytes.Equal(excludeNodeID.Bytes(), node.ID().Bytes()) {
+			t.Fatalf("GetNodes returned the node we excluded, ID: %s", node.ID().String())
+		}
+	}
+}
+
+// TestGetNodesByID creates a set of nodes and attempts to retrieve a subset of them by ID
+// If a node is not returned, or more nodes than expected are returned, the test fails.
+func TestGetNodesByID(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 5
+	nodes, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Could not create test nodes: %v", err)
+	}
+
+	numSubsetNodes := 2
+	subsetNodes := nodes[0:numSubsetNodes]
+	var subsetNodeIDs []enode.ID
+	for _, node := range subsetNodes {
+		subsetNodeIDs = append(subsetNodeIDs, node.ID())
+	}
+
+	gotNodesByID := network.GetNodesByID(subsetNodeIDs)
+	if len(gotNodesByID) != numSubsetNodes {
+		t.Fatalf("Expected %d nodes, got %d", numSubsetNodes, len(gotNodesByID))
+	}
+
+	for _, node1 := range subsetNodes {
+		match := false
+		for _, node2 := range gotNodesByID {
+			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created node was not returned by GetNodesByID(), ID: %s", node1.ID().String())
+		}
+	}
+}
+
+// TestGetNodesByProperty creates a subset of nodes with a property assigned.
+// GetNodesByProperty is then checked for correctness by comparing the nodes returned to those initially created.
+// If a node with a property is not found, or more nodes than expected are returned, the test fails.
+func TestGetNodesByProperty(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 3
+	_, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Failed to create nodes: %v", err)
+	}
+
+	numPropertyNodes := 3
+	propertyTest := "test"
+	propertyNodes, err := createTestNodesWithProperty(propertyTest, numPropertyNodes, network)
+	if err != nil {
+		t.Fatalf("Failed to create nodes with property: %v", err)
+	}
+
+	gotNodesByProperty := network.GetNodesByProperty(propertyTest)
+	if len(gotNodesByProperty) != numPropertyNodes {
+		t.Fatalf("Expected %d nodes with a property, got %d", numPropertyNodes, len(gotNodesByProperty))
+	}
+
+	for _, node1 := range propertyNodes {
+		match := false
+		for _, node2 := range gotNodesByProperty {
+			if bytes.Equal(node1.ID().Bytes(), node2.ID().Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("A created node with property was not returned by GetNodesByProperty(), ID: %s", node1.ID().String())
+		}
+	}
+}
+
+// TestGetNodeIDsByProperty creates a subset of nodes with a property assigned.
+// GetNodeIDsByProperty is then checked for correctness by comparing the node IDs returned to those initially created.
+// If a node ID with a property is not found, or more nodes IDs than expected are returned, the test fails.
+func TestGetNodeIDsByProperty(t *testing.T) {
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test": newTestService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+
+	numNodes := 3
+	_, err := createTestNodes(numNodes, network)
+	if err != nil {
+		t.Fatalf("Failed to create nodes: %v", err)
+	}
+
+	numPropertyNodes := 3
+	propertyTest := "test"
+	propertyNodes, err := createTestNodesWithProperty(propertyTest, numPropertyNodes, network)
+	if err != nil {
+		t.Fatalf("Failed to created nodes with property: %v", err)
+	}
+
+	gotNodeIDsByProperty := network.GetNodeIDsByProperty(propertyTest)
+	if len(gotNodeIDsByProperty) != numPropertyNodes {
+		t.Fatalf("Expected %d nodes with a property, got %d", numPropertyNodes, len(gotNodeIDsByProperty))
+	}
+
+	for _, node1 := range propertyNodes {
+		match := false
+		id1 := node1.ID()
+		for _, id2 := range gotNodeIDsByProperty {
+			if bytes.Equal(id1.Bytes(), id2.Bytes()) {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			t.Fatalf("Not all nodes IDs were returned by GetNodeIDsByProperty(), ID: %s", id1.String())
+		}
+	}
+}
+
 func triggerChecks(ctx context.Context, ids []enode.ID, trigger chan enode.ID, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
@@ -483,5 +757,119 @@ func benchmarkMinimalServiceTmp(b *testing.B) {
 				}
 			}
 		}
+	}
+}
+
+func TestNode_UnmarshalJSON(t *testing.T) {
+	t.Run("up_field", func(t *testing.T) {
+		runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONUpField())
+	})
+	t.Run("config_field", func(t *testing.T) {
+		runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONConfigField())
+	})
+}
+
+func runNodeUnmarshalJSON(t *testing.T, tests []nodeUnmarshalTestCase) {
+	t.Helper()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got *Node
+			if err := json.Unmarshal([]byte(tt.marshaled), &got); err != nil {
+				expectErrorMessageToContain(t, err, tt.wantErr)
+				got = nil
+			}
+			expectNodeEquality(t, got, tt.want)
+		})
+	}
+}
+
+type nodeUnmarshalTestCase struct {
+	name      string
+	marshaled string
+	want      *Node
+	wantErr   string
+}
+
+func expectErrorMessageToContain(t *testing.T, got error, want string) {
+	t.Helper()
+	if got == nil && want == "" {
+		return
+	}
+
+	if got == nil && want != "" {
+		t.Errorf("error was expected, got: nil, want: %v", want)
+		return
+	}
+
+	if !strings.Contains(got.Error(), want) {
+		t.Errorf(
+			"unexpected error message, got  %v, want: %v",
+			want,
+			got,
+		)
+	}
+}
+
+func expectNodeEquality(t *testing.T, got, want *Node) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Node.UnmarshalJSON() = %v, want %v", got, want)
+	}
+}
+
+func casesNodeUnmarshalJSONUpField() []nodeUnmarshalTestCase {
+	return []nodeUnmarshalTestCase{
+		{
+			name:      "empty json",
+			marshaled: "{}",
+			want:      newNode(nil, nil, false),
+		},
+		{
+			name:      "a stopped node",
+			marshaled: "{\"up\": false}",
+			want:      newNode(nil, nil, false),
+		},
+		{
+			name:      "a running node",
+			marshaled: "{\"up\": true}",
+			want:      newNode(nil, nil, true),
+		},
+		{
+			name:      "invalid JSON value on valid key",
+			marshaled: "{\"up\": foo}",
+			wantErr:   "invalid character",
+		},
+		{
+			name:      "invalid JSON key and value",
+			marshaled: "{foo: bar}",
+			wantErr:   "invalid character",
+		},
+		{
+			name:      "bool value expected but got something else (string)",
+			marshaled: "{\"up\": \"true\"}",
+			wantErr:   "cannot unmarshal string into Go struct",
+		},
+	}
+}
+
+func casesNodeUnmarshalJSONConfigField() []nodeUnmarshalTestCase {
+	// Don't do a big fuss around testing, as adapters.NodeConfig should
+	// handle it's own serialization. Just do a sanity check.
+	return []nodeUnmarshalTestCase{
+		{
+			name:      "Config field is omitted",
+			marshaled: "{}",
+			want:      newNode(nil, nil, false),
+		},
+		{
+			name:      "Config field is nil",
+			marshaled: "{\"config\": null}",
+			want:      newNode(nil, nil, false),
+		},
+		{
+			name:      "a non default Config field",
+			marshaled: "{\"config\":{\"name\":\"node_ecdd0\",\"port\":44665}}",
+			want:      newNode(nil, &adapters.NodeConfig{Name: "node_ecdd0", Port: 44665}, false),
+		},
 	}
 }

@@ -16,6 +16,8 @@
 
 package params
 
+import "github.com/ethereum/go-ethereum/common"
+
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main MIX network.
 var MainnetBootnodes = []string{
@@ -27,15 +29,7 @@ var MainnetBootnodes = []string{
 	"enode://e0c926dcdc5c1cf58b2ecba371c577c28c28c91f9b210093178a812389b65e5b53f0e478753b94fceb0b36645b779a915ca57c0c48507fe4d7f786508653656c@74.207.240.177:30313",
 	// Freemont Geth
 	"enode://37fe8c0f8d667f110316de3109dcc2e9c9247219998e9ac395db39511bef697f9646f73d86a43da491efce35458f53ac3ac0994b85f7086bbf244809d4e7eb7f@74.207.240.177:30303",
-	// Dallas Parity
-	"enode://a2a2adb8c12b9b189306050013a44f28db30f92fb3670db9675a049b98b96eb18901d6ff7b961b6e96cfa3923ac29e8f647ef452f0a23ddfef3903ac1cf826af@173.255.195.214:30313",
-	// Dallas Geth
-	"enode://ed6fea8e7389bb75ff34846e4aaefa9157c9c79828c6404f4a0ab6b997a613f777aecaed5092c3f51abdf918926c925f7ee4f4cffdb0ac37775d03070a3d6b55@173.255.195.214:30303",
-	// Atlanta Parity
-	"enode://5460fd1ad217941befd0f8d060e6729a0535a0738770aba56827d1313c09aeb68e3098d458aace59faba2c6780b8c9c30cb140b80cd8e30ca3a074ce6d3344d3@50.116.38.52:30313",
-	// Atlanta Geth
-	"enode://9109e01dec60b67afa5aea77da17e0cb9a716a547469be378eb122c545a3fda9082e553624ff9e673195a715d5628ebf046a6c4ff315e566420e3bdde003bd9a@50.116.38.52:30303",
-	// Newark Parity
+  // Newark Parity
 	"enode://99fff4ed887d6a6a7b6e03a657c35c06d0eede1909ec289a362bad9d37dd4085886461bbce83aa484ce1327badb3c5958365caa851d71de49dc4530e075b64bc@45.79.128.151:30313",
 	// Newark Geth
 	"enode://4b4c06445175b77ac07eba03ac624f72e4e86065ee8bbdbca5f882a2a333e2608e6ef2ae5b5779816abd8d07ae6ec08f75888edeab3bc06f2b75871feb14afef@45.79.128.151:30303",
@@ -70,6 +64,20 @@ var RinkebyBootnodes = []string{
 	"enode://b6b28890b006743680c52e64e0d16db57f28124885595fa03a562be1d2bf0f3a1da297d56b13da25fb992888fd556d4c1a27b1f39d531bde7de1921c90061cc6@159.89.28.211:30303", // AKASHA
 }
 
+// GoerliBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Görli test network.
+var GoerliBootnodes = []string{
+	// Upstream bootnodes
+	"enode://011f758e6552d105183b1761c5e2dea0111bc20fd5f6422bc7f91e0fabbec9a6595caf6239b37feb773dddd3f87240d99d859431891e4a642cf2a0a9e6cbb98a@51.141.78.53:30303",
+	"enode://176b9417f511d05b6b2cf3e34b756cf0a7096b3094572a8f6ef4cdcb9d1f9d00683bf0f83347eebdf3b81c3521c2332086d9592802230bf528eaf606a1d9677b@13.93.54.137:30303",
+	"enode://46add44b9f13965f7b9875ac6b85f016f341012d84f975377573800a863526f4da19ae2c620ec73d11591fa9510e992ecc03ad0751f53cc02f7c7ed6d55c7291@94.237.54.114:30313",
+	"enode://c1f8b7c2ac4453271fa07d8e9ecf9a2e8285aa0bd0c07df0131f47153306b0736fd3db8924e7a9bf0bed6b1d8d4f87362a71b033dc7c64547728d953e43e59b2@52.64.155.147:30303",
+	"enode://f4a9c6ee28586009fb5a96c8af13a58ed6d8315a9eee4772212c1d4d9cebe5a8b8a78ea4434f318726317d04a3f531a1ef0420cf9752605a562cfe858c46e263@213.186.16.82:30303",
+
+	// Ethereum Foundation bootnode
+	"enode://a61215641fb8714a373c80edbfa0ea8878243193f57c96eeb44d0bc019ef295abd4e044fd619bfc4c59731a73fb79afe84e9ab6da0c743ceb479cbb6d263fa91@3.11.147.67:30303",
+}
+
 // DiscoveryV5Bootnodes are the enode URLs of the P2P bootstrap nodes for the
 // experimental RLPx v5 topic-discovery network.
 var DiscoveryV5Bootnodes = []string{
@@ -77,4 +85,15 @@ var DiscoveryV5Bootnodes = []string{
 	"enode://0cc5f5ffb5d9098c8b8c62325f3797f56509bff942704687b6530992ac706e2cb946b90a34f1f19548cd3c7baccbcaea354531e5983c7d1bc0dee16ce4b6440b@40.118.3.223:30304",
 	"enode://1c7a64d76c0334b0418c004af2f67c50e36a3be60b5e4790bdac0439d21603469a85fad36f2473c9a80eb043ae60936df905fa28f1ff614c3e5dc34f15dcd2dc@40.118.3.223:30306",
 	"enode://85c85d7143ae8bb96924f2b54f1b3e70d8c4d367af305325d30a61385a432f247d2c75c45c6b4a60335060d072d7f5b35dd1d4c45f76941f62a4f83b6e75daaf@40.118.3.223:30307",
+}
+
+const dnsPrefix = "enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@"
+
+// These DNS names provide bootstrap connectivity for public testnets and the mainnet.
+// See https://github.com/ethereum/discv4-dns-lists for more information.
+var KnownDNSNetworks = map[common.Hash]string{
+	MainnetGenesisHash: dnsPrefix + "all.mainnet.ethdisco.net",
+	TestnetGenesisHash: dnsPrefix + "all.ropsten.ethdisco.net",
+	RinkebyGenesisHash: dnsPrefix + "all.rinkeby.ethdisco.net",
+	GoerliGenesisHash:  dnsPrefix + "all.goerli.ethdisco.net",
 }
