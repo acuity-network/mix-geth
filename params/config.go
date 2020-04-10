@@ -70,8 +70,8 @@ var (
 		Ethash:              new(EthashConfig),
 	}
 
-  // RopstenChainConfig contains the chain parameters to run a node on the Ropsten test network.
-  RopstenChainConfig = &ChainConfig{
+	// RopstenChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	RopstenChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(3),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
